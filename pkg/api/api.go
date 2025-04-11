@@ -2,13 +2,13 @@ package api
 
 import (
 	"encoding/json"
-	"go_final_project/pkg/db"
 	"net/http"
 )
 
-const (
-	DateFormat = "20060102"
-)
+type Response struct {
+	ID    int64  `json:"id,omitempty,string"`
+	Error string `json:"error,omitempty"`
+}
 
 func Init() {
 	http.HandleFunc("/api/nextdate", nextDayHandler)
@@ -32,7 +32,7 @@ func Init() {
 }
 
 func responseError(w http.ResponseWriter, message string, statusCode int) {
-	response := db.Response{Error: message}
+	response := Response{Error: message}
 	writeJSON(w, response, statusCode)
 }
 
@@ -45,5 +45,9 @@ func writeJSON(w http.ResponseWriter, data interface{}, statusCode int) {
 		http.Error(w, `{"error":"failed to serialize JSON"}`, http.StatusInternalServerError)
 		return
 	}
-	w.Write(jsonResponse)
+	_, err = w.Write(jsonResponse)
+	if err != nil {
+		http.Error(w, `{"error":"failed to write JSON"}`, http.StatusInternalServerError)
+		return
+	}
 }

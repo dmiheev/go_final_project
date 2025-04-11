@@ -3,64 +3,22 @@ package api
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
-	"go_final_project/pkg/db"
 	"net/http"
 	"strconv"
 	"time"
+
+	"go_final_project/pkg/db"
+	"go_final_project/pkg/utils"
 )
 
-func ValidateTask(task *db.Task) error {
-	now := time.Now()
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-
-	if task.Title == "" {
-		return errors.New("task title is required")
-	}
-
-	if task.Date == "" {
-		task.Date = today.Format(DateFormat)
-		return nil
-	}
-
-	parsedDate, err := time.Parse(DateFormat, task.Date)
-	if err != nil {
-		return errors.New("invalid date format, expected YYYYMMDD")
-	}
-
-	if parsedDate.Before(today) {
-		if task.Repeat == "" {
-			task.Date = today.Format(DateFormat)
-			return nil
-		}
-
-		nextDate, err := NextDate(today, task.Date, task.Repeat)
-		if err != nil {
-			return err
-		}
-		task.Date = nextDate
-		return nil
-	}
-
-	if task.Repeat != "" {
-		_, err = NextDate(today, task.Date, task.Repeat)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 func tasksHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		responseError(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
+	search := r.URL.Query().Get("search")
+	limit := r.URL.Query().Get("limit")
+	if limit == "" {
+		limit = "50"
 	}
 
-	search := r.URL.Query().Get("search")
-
-	tasks, err := db.GetTasks(search)
+	tasks, err := db.GetTasks(search, limit)
 	if err != nil {
 		responseError(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -85,7 +43,7 @@ func updateTaskHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = ValidateTask(&task); err != nil {
+	if err = task.Validate(); err != nil {
 		responseError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -143,7 +101,7 @@ func taskHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = ValidateTask(&task); err != nil {
+	if err = task.Validate(); err != nil {
 		responseError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -153,7 +111,7 @@ func taskHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := db.Response{ID: task.ID}
+	response := Response{ID: task.ID}
 	writeJSON(w, response, http.StatusOK)
 }
 
@@ -191,18 +149,20 @@ func taskDoneHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	parsedDate, err := time.Parse("20060102", task.Date)
+	parsedDate, err := time.Parse(utils.DateFormat, task.Date)
 	if err != nil {
 		responseError(w, "invalid date format, expected YYYYMMDD", http.StatusBadRequest)
 	}
 
-	nextDate, err := NextDate(parsedDate, task.Date, task.Repeat)
+	nextDate, err := utils.NextDate(parsedDate, task.Date, task.Repeat)
 	if err != nil {
 		responseError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	err = db.UpdateTaskDate(parsedId, nextDate)
+	task.Date = nextDate
+
+	err = db.UpdateTask(task)
 	if err != nil {
 		responseError(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -231,4 +191,35 @@ func taskDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, map[string]interface{}{}, http.StatusOK)
+}
+
+func nextDayHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	nowStr := r.FormValue("now")
+	dateStr := r.FormValue("date")
+	repeat := r.FormValue("repeat")
+
+	if nowStr == "" || dateStr == "" || repeat == "" {
+		http.Error(w, "missing required parameters: now, date or repeat", http.StatusBadRequest)
+		return
+	}
+
+	now, err := time.Parse(utils.DateFormat, nowStr)
+	if err != nil {
+		http.Error(w, "invalid format for 'now': "+nowStr, http.StatusBadRequest)
+		return
+	}
+
+	nextDate, err := utils.NextDate(now, dateStr, repeat)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/plain")
+	w.Write([]byte(nextDate))
 }

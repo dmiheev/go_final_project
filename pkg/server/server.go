@@ -1,26 +1,30 @@
 package server
 
 import (
-    "go_final_project/pkg/api"
-    "go_final_project/tests"
-    "log"
-    "net/http"
-    "os"
-    "strconv"
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"strconv"
+
+	"go_final_project/pkg/api"
+	"go_final_project/tests"
 )
 
 func Run() {
-    webDir := "./web"
-    port, err := strconv.Atoi(os.Getenv("TODO_PORT"))
-    if err != nil {
-        port = tests.Port
-    }
-    http.Handle("/", http.FileServer(http.Dir(webDir)))
+	webDir := "./web"
+	port, err := strconv.Atoi(os.Getenv("TODO_PORT"))
+	if err != nil {
+		port = tests.Port
+	}
+	http.Handle("/", http.FileServer(http.Dir(webDir)))
 
-    api.Init()
+	api.Init()
 
-    err = http.ListenAndServe(":"+strconv.Itoa(port), nil)
-    if err != nil {
-        log.Fatal("ListenAndServe: ", err)
-    }
+	fmt.Printf("Server running on port %d...", port)
+	err = http.ListenAndServe(":"+strconv.Itoa(port), nil)
+	if err != nil {
+		log.Fatal("ListenAndServe: ", err)
+	}
+
 }

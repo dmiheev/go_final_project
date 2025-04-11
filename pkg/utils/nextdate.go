@@ -1,43 +1,15 @@
-package api
+package utils
 
 import (
 	"errors"
-	"net/http"
 	"strconv"
 	"strings"
 	"time"
 )
 
-func nextDayHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	nowStr := r.FormValue("now")
-	dateStr := r.FormValue("date")
-	repeat := r.FormValue("repeat")
-
-	if nowStr == "" || dateStr == "" || repeat == "" {
-		http.Error(w, "missing required parameters: now, date or repeat", http.StatusBadRequest)
-		return
-	}
-
-	now, err := time.Parse(DateFormat, nowStr)
-	if err != nil {
-		http.Error(w, "invalid format for 'now': "+nowStr, http.StatusBadRequest)
-		return
-	}
-
-	nextDate, err := NextDate(now, dateStr, repeat)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	w.Header().Set("Content-Type", "text/plain")
-	w.Write([]byte(nextDate))
-}
+const (
+	DateFormat = "20060102"
+)
 
 func NextDate(now time.Time, dstart string, repeat string) (string, error) {
 	if repeat == "" {

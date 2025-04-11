@@ -31,6 +31,9 @@ func Init() error {
 
 	if install {
 		dbConn, err = open()
+
+		defer dbConn.Close()
+
 		if err != nil {
 			return err
 		}
@@ -39,6 +42,7 @@ func Init() error {
 			return err
 		}
 	}
+
 	return nil
 }
 

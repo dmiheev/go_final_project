@@ -1,8 +1,11 @@
 package db
 
 import (
+	"errors"
 	"fmt"
 	"time"
+
+	"go_final_project/pkg/utils"
 )
 
 type Task struct {
@@ -13,18 +16,12 @@ type Task struct {
 	Repeat  string `json:"repeat"`
 }
 
-type Response struct {
-	ID    int64  `json:"id,omitempty,string"`
-	Error string `json:"error,omitempty"`
-}
-
 type TasksResp struct {
 	Tasks []Task `json:"tasks"`
 }
 
 func AddTask(task *Task) (int64, error) {
 	var id int64
-	dbConn, _ = open()
 	query := `INSERT INTO scheduler (date, title, comment, repeat) VALUES (?, ?, ?, ?)`
 	res, err := dbConn.Exec(query, task.Date, task.Title, task.Comment, task.Repeat)
 	if err != nil {
@@ -40,7 +37,7 @@ func AddTask(task *Task) (int64, error) {
 	return id, nil
 }
 
-func GetTasks(search string) ([]Task, error) {
+func GetTasks(search, limit string) ([]Task, error) {
 	var query string
 	var args []interface{}
 
@@ -52,9 +49,9 @@ func GetTasks(search string) ([]Task, error) {
 				FROM scheduler
 				WHERE date = ?
 				ORDER BY date
-				LIMIT 50
+				LIMIT ?
 			`
-			args = append(args, parsedDate.Format("20060102"))
+			args = append(args, parsedDate.Format(utils.DateFormat), limit)
 		} else {
 			searchPattern := "%" + search + "%"
 			query = `
@@ -62,20 +59,20 @@ func GetTasks(search string) ([]Task, error) {
 				FROM scheduler
 				WHERE title LIKE ? OR comment LIKE ?
 				ORDER BY date
-				LIMIT 50
+				LIMIT ?
 			`
-			args = append(args, searchPattern, searchPattern)
+			args = append(args, searchPattern, searchPattern, limit)
 		}
 	} else {
 		query = `
 			SELECT id, date, title, comment, repeat
 			FROM scheduler
 			ORDER BY date
-			LIMIT 50
+			LIMIT ?
 		`
+		args = append(args, limit)
 	}
 
-	dbConn, _ = open()
 	rows, err := dbConn.Query(query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch tasks: %w", err)
@@ -103,13 +100,12 @@ func GetTasks(search string) ([]Task, error) {
 }
 
 func GetTask(id int64) (*Task, error) {
-	db, _ := open()
 	query := `
 		SELECT id, date, title, comment, repeat
 		FROM scheduler
 		WHERE id = ?
 	`
-	row := db.QueryRow(query, id)
+	row := dbConn.QueryRow(query, id)
 
 	var task Task
 	err := row.Scan(&task.ID, &task.Date, &task.Title, &task.Comment, &task.Repeat)
@@ -123,8 +119,7 @@ func GetTask(id int64) (*Task, error) {
 func UpdateTask(task *Task) error {
 	query := `UPDATE scheduler SET date = ?, title = ?, comment = ?, repeat = ? WHERE id = ?`
 
-	db, _ := open()
-	res, err := db.Exec(query, task.Date, task.Title, task.Comment, task.Repeat, task.ID)
+	res, err := dbConn.Exec(query, task.Date, task.Title, task.Comment, task.Repeat, task.ID)
 	if err != nil {
 		return fmt.Errorf("failed to update task: %w", err)
 	}
@@ -144,8 +139,7 @@ func UpdateTask(task *Task) error {
 func DeleteTask(id int64) error {
 	query := `DELETE FROM scheduler WHERE id = ?`
 
-	db, _ := open()
-	res, err := db.Exec(query, id)
+	res, err := dbConn.Exec(query, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete task: %w", err)
 	}
@@ -162,22 +156,43 @@ func DeleteTask(id int64) error {
 	return nil
 }
 
-func UpdateTaskDate(id int64, nextDate string) error {
-	query := `UPDATE scheduler SET date = ? WHERE id = ?`
+func (task *Task) Validate() error {
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 
-	db, _ := open()
-	res, err := db.Exec(query, nextDate, id)
-	if err != nil {
-		return fmt.Errorf("failed to update task date: %w", err)
+	if task.Title == "" {
+		return errors.New("task title is required")
 	}
 
-	rowsAffected, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to check rows affected: %w", err)
+	if task.Date == "" {
+		task.Date = today.Format(utils.DateFormat)
+		return nil
 	}
 
-	if rowsAffected == 0 {
-		return fmt.Errorf("task not found")
+	parsedDate, err := time.Parse(utils.DateFormat, task.Date)
+	if err != nil {
+		return errors.New("invalid date format, expected YYYYMMDD")
+	}
+
+	if parsedDate.Before(today) {
+		if task.Repeat == "" {
+			task.Date = today.Format(utils.DateFormat)
+			return nil
+		}
+
+		nextDate, err := utils.NextDate(today, task.Date, task.Repeat)
+		if err != nil {
+			return err
+		}
+		task.Date = nextDate
+		return nil
+	}
+
+	if task.Repeat != "" {
+		_, err = utils.NextDate(today, task.Date, task.Repeat)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
