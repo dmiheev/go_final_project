@@ -2,11 +2,11 @@ package db
 
 import (
 	"database/sql"
+	"fmt"
+	"log"
 	_ "modernc.org/sqlite"
 	"os"
 )
-
-var dbConn *sql.DB
 
 const (
 	schema = `CREATE TABLE scheduler
@@ -20,8 +20,13 @@ const (
               CREATE INDEX idx_scheduler_date ON scheduler (date);`
 )
 
-func Init() error {
+func Init() (*sql.DB, error) {
 	dbFile := "./scheduler.db"
+	envFile := os.Getenv("TODO_DBFILE")
+	if len(envFile) > 0 {
+		dbFile = envFile
+	}
+
 	_, err := os.Stat(dbFile)
 
 	var install bool
@@ -29,32 +34,24 @@ func Init() error {
 		install = true
 	}
 
-	if install {
-		dbConn, err = open()
-
-		defer dbConn.Close()
-
-		if err != nil {
-			return err
-		}
-		_, err = dbConn.Exec(schema)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func open() (*sql.DB, error) {
-	dbFile := "./scheduler.db"
-	envFile := os.Getenv("TODO_DBFILE")
-	if len(envFile) > 0 {
-		dbFile = envFile
-	}
 	db, err := sql.Open("sqlite", dbFile)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error while open db: %w", err)
 	}
+
+	if install {
+		if err = createTable(db); err != nil {
+			return nil, err
+		}
+	}
+
 	return db, nil
+}
+
+func createTable(db *sql.DB) error {
+	if _, err := db.Exec(schema); err != nil {
+		log.Fatalf("failed to create table: %v", err)
+		return err
+	}
+	return nil
 }

@@ -10,21 +10,21 @@ type Response struct {
 	Error string `json:"error,omitempty"`
 }
 
-func Init() {
-	http.HandleFunc("/api/nextdate", nextDayHandler)
-	http.HandleFunc("/api/tasks", tasksHandler)
-	http.HandleFunc("/api/task/done", taskDoneHandler)
+func Init(ts TaskService) {
+	http.HandleFunc("/api/nextdate", ts.nextDayHandler)
+	http.HandleFunc("/api/tasks", ts.tasksHandler)
+	http.HandleFunc("/api/task/done", ts.taskDoneHandler)
 
 	http.HandleFunc("/api/task", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
-			getTaskHandler(w, r)
+			ts.getTaskHandler(w, r)
 		case http.MethodPost:
-			taskHandler(w, r)
+			ts.taskHandler(w, r)
 		case http.MethodPut:
-			updateTaskHandler(w, r)
+			ts.updateTaskHandler(w, r)
 		case http.MethodDelete:
-			taskDeleteHandler(w, r)
+			ts.taskDeleteHandler(w, r)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}

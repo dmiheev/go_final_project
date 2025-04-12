@@ -11,7 +11,7 @@ import (
 	"go_final_project/tests"
 )
 
-func Run() {
+func Run(ts api.TaskService) {
 	webDir := "./web"
 	port, err := strconv.Atoi(os.Getenv("TODO_PORT"))
 	if err != nil {
@@ -19,7 +19,7 @@ func Run() {
 	}
 	http.Handle("/", http.FileServer(http.Dir(webDir)))
 
-	api.Init()
+	api.Init(ts)
 
 	fmt.Printf("Server running on port %d...", port)
 	err = http.ListenAndServe(":"+strconv.Itoa(port), nil)

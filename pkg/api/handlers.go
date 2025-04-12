@@ -11,14 +11,22 @@ import (
 	"go_final_project/pkg/utils"
 )
 
-func tasksHandler(w http.ResponseWriter, r *http.Request) {
+type TaskService struct {
+	store db.Storage
+}
+
+func NewTaskService(store db.Storage) TaskService {
+	return TaskService{store: store}
+}
+
+func (t TaskService) tasksHandler(w http.ResponseWriter, r *http.Request) {
 	search := r.URL.Query().Get("search")
 	limit := r.URL.Query().Get("limit")
 	if limit == "" {
 		limit = "50"
 	}
 
-	tasks, err := db.GetTasks(search, limit)
+	tasks, err := t.store.GetTasks(search, limit)
 	if err != nil {
 		responseError(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -28,7 +36,7 @@ func tasksHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, response, http.StatusOK)
 }
 
-func updateTaskHandler(w http.ResponseWriter, r *http.Request) {
+func (t TaskService) updateTaskHandler(w http.ResponseWriter, r *http.Request) {
 	var task db.Task
 	var buf bytes.Buffer
 
@@ -48,7 +56,7 @@ func updateTaskHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = db.UpdateTask(&task)
+	err = t.store.UpdateTask(&task)
 	if err != nil {
 		responseError(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -57,7 +65,7 @@ func updateTaskHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]interface{}{}, http.StatusOK)
 }
 
-func getTaskHandler(w http.ResponseWriter, r *http.Request) {
+func (t TaskService) getTaskHandler(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	if id == "" {
 		responseError(w, "task ID is required", http.StatusBadRequest)
@@ -70,7 +78,7 @@ func getTaskHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	task, err := db.GetTask(parsedId)
+	task, err := t.store.GetTask(parsedId)
 	if err != nil {
 		responseError(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -86,7 +94,7 @@ func getTaskHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, response, http.StatusOK)
 }
 
-func taskHandler(w http.ResponseWriter, r *http.Request) {
+func (t TaskService) taskHandler(w http.ResponseWriter, r *http.Request) {
 	var task db.Task
 	var buf bytes.Buffer
 
@@ -106,7 +114,7 @@ func taskHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err = db.AddTask(&task); err != nil {
+	if _, err = t.store.AddTask(&task); err != nil {
 		responseError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -115,7 +123,7 @@ func taskHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, response, http.StatusOK)
 }
 
-func taskDoneHandler(w http.ResponseWriter, r *http.Request) {
+func (t TaskService) taskDoneHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		responseError(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -133,14 +141,14 @@ func taskDoneHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	task, err := db.GetTask(parsedId)
+	task, err := t.store.GetTask(parsedId)
 	if err != nil {
 		responseError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	if task.Repeat == "" {
-		err = db.DeleteTask(parsedId)
+		err = t.store.DeleteTask(parsedId)
 		if err != nil {
 			responseError(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -162,7 +170,7 @@ func taskDoneHandler(w http.ResponseWriter, r *http.Request) {
 
 	task.Date = nextDate
 
-	err = db.UpdateTask(task)
+	err = t.store.UpdateTask(task)
 	if err != nil {
 		responseError(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -171,7 +179,7 @@ func taskDoneHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]interface{}{}, http.StatusOK)
 }
 
-func taskDeleteHandler(w http.ResponseWriter, r *http.Request) {
+func (t TaskService) taskDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	if id == "" {
 		responseError(w, "task ID is required", http.StatusBadRequest)
@@ -184,7 +192,7 @@ func taskDeleteHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = db.DeleteTask(parsedId)
+	err = t.store.DeleteTask(parsedId)
 	if err != nil {
 		responseError(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -193,7 +201,7 @@ func taskDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]interface{}{}, http.StatusOK)
 }
 
-func nextDayHandler(w http.ResponseWriter, r *http.Request) {
+func (t TaskService) nextDayHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return

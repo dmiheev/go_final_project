@@ -1,6 +1,7 @@
 package db
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 	"time"
@@ -20,10 +21,18 @@ type TasksResp struct {
 	Tasks []Task `json:"tasks"`
 }
 
-func AddTask(task *Task) (int64, error) {
+type Storage struct {
+	db *sql.DB
+}
+
+func NewStorage(db *sql.DB) Storage {
+	return Storage{db: db}
+}
+
+func (s Storage) AddTask(task *Task) (int64, error) {
 	var id int64
 	query := `INSERT INTO scheduler (date, title, comment, repeat) VALUES (?, ?, ?, ?)`
-	res, err := dbConn.Exec(query, task.Date, task.Title, task.Comment, task.Repeat)
+	res, err := s.db.Exec(query, task.Date, task.Title, task.Comment, task.Repeat)
 	if err != nil {
 		return 0, fmt.Errorf("failed to insert task: %w", err)
 	}
@@ -37,7 +46,7 @@ func AddTask(task *Task) (int64, error) {
 	return id, nil
 }
 
-func GetTasks(search, limit string) ([]Task, error) {
+func (s Storage) GetTasks(search, limit string) ([]Task, error) {
 	var query string
 	var args []interface{}
 
@@ -73,7 +82,7 @@ func GetTasks(search, limit string) ([]Task, error) {
 		args = append(args, limit)
 	}
 
-	rows, err := dbConn.Query(query, args...)
+	rows, err := s.db.Query(query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch tasks: %w", err)
 	}
@@ -99,13 +108,13 @@ func GetTasks(search, limit string) ([]Task, error) {
 	return tasks, nil
 }
 
-func GetTask(id int64) (*Task, error) {
+func (s Storage) GetTask(id int64) (*Task, error) {
 	query := `
 		SELECT id, date, title, comment, repeat
 		FROM scheduler
 		WHERE id = ?
 	`
-	row := dbConn.QueryRow(query, id)
+	row := s.db.QueryRow(query, id)
 
 	var task Task
 	err := row.Scan(&task.ID, &task.Date, &task.Title, &task.Comment, &task.Repeat)
@@ -116,10 +125,10 @@ func GetTask(id int64) (*Task, error) {
 	return &task, nil
 }
 
-func UpdateTask(task *Task) error {
+func (s Storage) UpdateTask(task *Task) error {
 	query := `UPDATE scheduler SET date = ?, title = ?, comment = ?, repeat = ? WHERE id = ?`
 
-	res, err := dbConn.Exec(query, task.Date, task.Title, task.Comment, task.Repeat, task.ID)
+	res, err := s.db.Exec(query, task.Date, task.Title, task.Comment, task.Repeat, task.ID)
 	if err != nil {
 		return fmt.Errorf("failed to update task: %w", err)
 	}
@@ -136,10 +145,10 @@ func UpdateTask(task *Task) error {
 	return nil
 }
 
-func DeleteTask(id int64) error {
+func (s Storage) DeleteTask(id int64) error {
 	query := `DELETE FROM scheduler WHERE id = ?`
 
-	res, err := dbConn.Exec(query, id)
+	res, err := s.db.Exec(query, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete task: %w", err)
 	}
